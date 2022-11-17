@@ -1,3 +1,9 @@
+# Copyright (c) 2022 Orange - All rights reserved
+# 
+# Author:  Joël Roman Ky
+# This code is distributed under the terms and conditions of the MIT License (https://opensource.org/licenses/MIT)
+# 
+
 import argparse, time
 import os
 
@@ -38,7 +44,7 @@ def parse_arguments():
                         help='The random generator seed. Default is 42.')
     parser.add_argument('--model-save-path', type=str, default='data/outputs/',
                         help='The folder to store the model outputs.')
-    parser.add_argument('--data-dir', type=str, default='data/',
+    parser.add_argument('--data-dir', type=str, default='data/outputs_csv/',
                         help='The folder where the data are stored.')
     parser.add_argument('--threshold', type=float, default=0.8, 
                         help='The threshold of anomalous observations to consider in a window. Default is 0.8.')

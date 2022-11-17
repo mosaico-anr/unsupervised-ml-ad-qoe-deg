@@ -1,3 +1,9 @@
+# Copyright (c) 2022 Orange - All rights reserved
+# 
+# Author:  Joël Roman Ky
+# This code is distributed under the terms and conditions of the MIT License (https://opensource.org/licenses/MIT)
+# 
+
 import argparse, os, time
 import contextlib
 
@@ -191,9 +197,9 @@ def parse_arguments():
                         help='The number of time each experiment is runned. Default is 5.')
     parser.add_argument('--models-list', nargs='*', default=all_models, choices=all_models,
                        help='The list of models to evaluate.')
-    parser.add_argument('--save-dir', type=str, default='/home/jupyter/scripts/experiments_outs/contamination_exps',
+    parser.add_argument('--save-dir', type=str, default='/data/outputs/contamination_exps',
                         help='The folder to store the model outputs.')
-    parser.add_argument('--data-dir', type=str, default='/home/jupyter/datasets/Datasets/outputs_csv/',
+    parser.add_argument('--data-dir', type=str, default='data/outputs_csv',
                         help='The folder where the data are stored.')
     parser.add_argument('--is-trained', action='store_true',
                         help='If the models are already trained. Default action is false.')
