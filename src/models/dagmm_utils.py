@@ -1,10 +1,13 @@
-# Copyright (c) 2022 Orange - All rights reserved
-# 
-# Author:  Joël Roman Ky
-# This code is distributed under the terms and conditions of the MIT License (https://opensource.org/licenses/MIT)
-# 
+"""
+Copyright (c) 2022 Orange - All rights reserved
 
-import logging, sys
+Author:  Joël Roman Ky
+This code is distributed under the terms and conditions
+of the MIT License (https://opensource.org/licenses/MIT)
+"""
+
+import logging
+import sys
 from typing import Tuple, List
 
 import numpy as np
@@ -25,8 +28,10 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 # Adapted from https://github.com/intrudetection/robevalanodetect
 
 class GMM(nn.Module, PyTorchUtils):
+    """Gaussian Mixture Model.
+    """
     def __init__(self, layers : List[Tuple], seed : int, gpu : int):
-        """_summary_
+        """Gaussian Mixture Model.
 
         Args:
             layers (List[Tuple])    : The GMM layers.
@@ -39,6 +44,14 @@ class GMM(nn.Module, PyTorchUtils):
         self.K = layers[-1][1]
 
     def create_network(self, layers: List[Tuple]):
+        """Build the GMM network.
+
+        Args:
+            layers (List[Tuple]): NN layers list.
+
+        Returns:
+            torch.nn.
+        """
         net_layers = []
         for in_neuron, out_neuron, act_fn in layers:
             if in_neuron and out_neuron:
@@ -46,12 +59,22 @@ class GMM(nn.Module, PyTorchUtils):
             net_layers.append(act_fn)
         return nn.Sequential(*net_layers)
 
-    def forward(self, x: torch.Tensor):
-        return self.net(x)
+    def forward(self, x_tensor: torch.Tensor):
+        """Forward function.
+
+        Args:
+            x_tensor (torch.Tensor): _description_
+
+        Returns:
+            torch.Tensor.
+        """
+        return self.net(x_tensor)
 
 class AEModel(nn.Module, PyTorchUtils):
+    """AutoEncoder model.
+    """
     def __init__(self, input_length: int,
-                 hidden_size: int, seed: int, gpu: int):
+                hidden_size: int, seed: int, gpu: int):
         """Auto-Encoder model architecture.
 
         Args:
@@ -65,16 +88,19 @@ class AEModel(nn.Module, PyTorchUtils):
         #input_length = n_features * sequence_length
 
         # creates powers of two between eight and the next smaller power from the input_length
-        dec_steps = 2 ** np.arange(max(np.ceil(np.log2(hidden_size)), 2), np.log2(input_length))[1:]
+        dec_steps = 2 ** np.arange(max(np.ceil(np.log2(hidden_size)), 2),
+                                np.log2(input_length))[1:]
         dec_setup = np.concatenate([[hidden_size], dec_steps.repeat(2), [input_length]])
         enc_setup = dec_setup[::-1]
 
-        enc_layers = np.array([[nn.Linear(int(a), int(b)), nn.Tanh()] for a, b in enc_setup.reshape(-1, 2)]).flatten()[:-1]
-        dec_layers = np.array([[nn.Linear(int(a), int(b)), nn.Tanh()] for a, b in dec_setup.reshape(-1, 2)]).flatten()[:-1]
-        self._encoder = nn.Sequential(*enc_layers)
-        self.to_device(self._encoder)
-        self._decoder = nn.Sequential(*dec_layers)
-        self.to_device(self._decoder)
+        enc_layers = np.array([[nn.Linear(int(a), int(b)), nn.Tanh()]
+                                for a, b in enc_setup.reshape(-1, 2)]).flatten()[:-1]
+        dec_layers = np.array([[nn.Linear(int(a), int(b)), nn.Tanh()]
+                                for a, b in dec_setup.reshape(-1, 2)]).flatten()[:-1]
+        self.encoder = nn.Sequential(*enc_layers)
+        self.to_device(self.encoder)
+        self.decoder = nn.Sequential(*dec_layers)
+        self.to_device(self.decoder)
 
     def forward(self, ts_batch, return_latent: bool=False):
         """Forward function of the Auto-Encoder.
@@ -88,8 +114,8 @@ class AEModel(nn.Module, PyTorchUtils):
                 The reconstructed batch.
         """
         flattened_sequence = ts_batch.view(ts_batch.size(0), -1)
-        enc = self._encoder(flattened_sequence.float())
-        dec = self._decoder(enc)
+        enc = self.encoder(flattened_sequence.float())
+        dec = self.decoder(enc)
         reconstructed_sequence = dec.view(ts_batch.size())
         return (reconstructed_sequence, enc) if return_latent else reconstructed_sequence
 
@@ -98,11 +124,12 @@ class DAGMMModel(nn.Module, PyTorchUtils):
     """
     This class proposes an unofficial implementation of the DAGMM architecture proposed in
     https://sites.cs.ucsb.edu/~bzong/doc/iclr18-dagmm.pdf.
-    Simply put, it's an end-to-end trained auto-encoder network complemented by a distinct gaussian mixture network.
+    Simply put, it's an end-to-end trained auto-encoder network complemented by a 
+    distinct gaussian mixture network.
     """
 
     def __init__(self, input_length: int, hidden_size: int,
-                 lambda_2=0.005, lambda_1=0.1, reg_covar=1e-12,
+                lambda_2=0.005, lambda_1=0.1, reg_covar=1e-12,
                 K: int=4,seed: int=None, gpu: int=None):
         """DAGMM model as implemented in https://github.com/danieltan07/dagmm.
 
@@ -111,7 +138,8 @@ class DAGMMModel(nn.Module, PyTorchUtils):
             hidden_size (int)               : The hidden size.
             lambda_2 (float, optional)      : DAGMM meta-parameters. Defaults to 0.005.
             lambda_1 (float, optional)      : DAGMM meta-parameters.. Defaults to 0.1.
-            reg_covar (_type_, optional)    : Regularization parameter for PD matrix. Defaults to 1e-12.
+            reg_covar (_type_, optional)    : Regularization parameter for PD matrix. 
+                                                Defaults to 1e-12.
             K (int, optional)               : _description_. Defaults to 4.
             seed (int, optional)            : The random generator seed. Defaults to None.
             gpu (int, optional)             : The number of the GPU device. Defaults to None.
@@ -123,7 +151,7 @@ class DAGMMModel(nn.Module, PyTorchUtils):
         self.lambda_1 = lambda_1
         self.lambda_2 = lambda_2
         self.reg_covar = reg_covar
-        self.ae = None
+        self.autoencoder = None
         self.gmm = None
         self.K = K
         self.seed = seed
@@ -134,33 +162,38 @@ class DAGMMModel(nn.Module, PyTorchUtils):
         self.resolve_params()
 
     def resolve_params(self):
-        # defaults to parameters described in section 4.3 of the paper
-        # https://sites.cs.ucsb.edu/~bzong/doc/iclr18-dagmm.pdf.
+        """Resolve the GMM and AE parameters.
+        Defaults to parameters described in section 4.3 of the paper
+        https://sites.cs.ucsb.edu/~bzong/doc/iclr18-dagmm.pdf.
+        """
         gmm_layers = [
             (self.hidden_size + 2, 10, nn.Tanh()),
             (10, 20, nn.Tanh()),
             (None, None, nn.Dropout(0.5)),
             (20, self.K, nn.Softmax(dim=1))
         ]
-        self.ae = AEModel(input_length=self.input_length, hidden_size=self.hidden_size,
-                          seed=self.seed, gpu=self.gpu)
+        self.autoencoder = AEModel(input_length=self.input_length, hidden_size=self.hidden_size,
+                            seed=self.seed, gpu=self.gpu)
         self.gmm = GMM(gmm_layers, seed=self.seed, gpu=self.gpu)
 
-    def forward(self, x: torch.Tensor):
-        """
-        This function compute the output of the network in the forward pass
-        :param x: input
-        :return: output of the model
+    def forward(self, x_tensor: torch.Tensor):
+        """This function compute the output of the network in the forward pass.
+
+        Args:
+            x_tensor (torch.Tensor): _description_
+
+        Returns:
+            tuple.
         """
 
         # computes the z vector of the original paper (p.4), that is
         # :math:`z = [z_c, z_r]` with
         #   - :math:`z_c = h(x; \theta_e)`
         #   - :math:`z_r = f(x, x')`
-        code = self.ae._encoder(x)
-        x_prime = self.ae._decoder(code)
-        rel_euc_dist = self.relative_euclidean_dist(x, x_prime)
-        cosim = self.cosim(x, x_prime)
+        code = self.autoencoder.encoder(x_tensor)
+        x_prime = self.autoencoder.decoder(code)
+        rel_euc_dist = self.relative_euclidean_dist(x_tensor, x_prime)
+        cosim = self.cosim(x_tensor, x_prime)
         z_r = torch.cat([code, rel_euc_dist.unsqueeze(-1), cosim.unsqueeze(-1)], dim=1)
 
         # compute gmm net output, that is
@@ -171,7 +204,7 @@ class DAGMMModel(nn.Module, PyTorchUtils):
 
         return code, x_prime, cosim, z_r, gamma_hat
 
-    def forward_end_dec(self, x: torch.Tensor):
+    def forward_end_dec(self, x_tensor: torch.Tensor):
         """
         This function compute the output of the network in the forward pass
         :param x: input
@@ -182,10 +215,10 @@ class DAGMMModel(nn.Module, PyTorchUtils):
         # :math:`z = [z_c, z_r]` with
         #   - :math:`z_c = h(x; \theta_e)`
         #   - :math:`z_r = f(x, x')`
-        code = self.ae._encoder(x)
-        x_prime = self.ae._decoder(code)
-        rel_euc_dist = self.relative_euclidean_dist(x, x_prime)
-        cosim = self.cosim(x, x_prime)
+        code = self.autoencoder.encoder(x_tensor)
+        x_prime = self.autoencoder.decoder(code)
+        rel_euc_dist = self.relative_euclidean_dist(x_tensor, x_prime)
+        cosim = self.cosim(x_tensor, x_prime)
         z_r = torch.cat([code, rel_euc_dist.unsqueeze(-1), cosim.unsqueeze(-1)], dim=1)
 
         return code, x_prime, cosim, z_r
@@ -204,24 +237,35 @@ class DAGMMModel(nn.Module, PyTorchUtils):
 
         return gamma_hat
 
-    def relative_euclidean_dist(self, x, x_prime):
-        return (x - x_prime).norm(2, dim=1) / x.norm(2, dim=1)
+    def relative_euclidean_dist(self, x_tensor, x_prime):
+        """Euclidian loss.
 
-    def compute_params(self, z: torch.Tensor, gamma: torch.Tensor):
+        Args:
+            x_tensor (torch.Tensor): Batch tensor.
+            x_prime (torch.Tensor): Encoder output tensor.
+
+        Returns:
+            _type_: _description_
+        """
+        return (x_tensor - x_prime).norm(2, dim=1) / x_tensor.norm(2, dim=1)
+
+    def compute_params(self, z_tensor: torch.Tensor, gamma: torch.Tensor):
         r"""
         Estimates the parameters of the GMM.
         Implements the following formulas (p.5):
             :math:`\hat{\phi_k} = \sum_{i=1}^N \frac{\hat{\gamma_{ik}}}{N}`
-            :math:`\hat{\mu}_k = \frac{\sum{i=1}^N \hat{\gamma_{ik} z_i}}{\sum{i=1}^N \hat{\gamma_{ik}}}`
+            :math:`\hat{\mu}_k = \frac{\sum{i=1}^N \hat{\gamma_{ik} z_i}}{\sum{i=1}^N 
+                                                    \hat{\gamma_{ik}}}`
             :math:`\hat{\Sigma_k} = \frac{
                 \sum{i=1}^N \hat{\gamma_{ik}} (z_i - \hat{\mu_k}) (z_i - \hat{\mu_k})^T}
                 {\sum{i=1}^N \hat{\gamma_{ik}}
             }`
         The second formula was modified to use matrices instead:
             :math:`\hat{\mu}_k = (I * \Gamma)^{-1} (\gamma^T z)`
-        Parameters
+
+        Args:
         ----------
-        z: N x D matrix (n_samples, n_features)
+        z_tensor: N x D matrix (n_samples, n_features)
         gamma: N x K matrix (n_samples, n_mixtures)
         Returns
         -------
@@ -231,20 +275,20 @@ class DAGMMModel(nn.Module, PyTorchUtils):
         sum_gamma = torch.sum(gamma, dim=0)
 
         # K
-        phi = (sum_gamma / N)
+        phi = sum_gamma / N
 
         # self.phi = phi.data
 
- 
         # K x D
-        mu = torch.sum(gamma.unsqueeze(-1) * z.unsqueeze(1), dim=0) / sum_gamma.unsqueeze(-1)
+        mu_tensor = torch.sum(gamma.unsqueeze(-1) * z_tensor.unsqueeze(1), dim=0) \
+                                        / sum_gamma.unsqueeze(-1)
         # self.mu = mu.data
         # z = N x D
         # mu = K x D
         # gamma N x K
 
         # z_mu = N x K x D
-        z_mu = torch.sqrt(gamma.unsqueeze(-1)) * (z.unsqueeze(1)- mu.unsqueeze(0))
+        z_mu = torch.sqrt(gamma.unsqueeze(-1)) * (z_tensor.unsqueeze(1)- mu_tensor.unsqueeze(0))
 
         # z_mu_outer = N x K x D x D
         z_mu_outer = z_mu.unsqueeze(-1) * z_mu.unsqueeze(-2)
@@ -272,13 +316,14 @@ class DAGMMModel(nn.Module, PyTorchUtils):
 #         cov_mat = torch.sum(cov_mat, dim=0) / gamma_sum.unsqueeze(-1).unsqueeze(-1)
 
 
-        return phi, mu, cov_mat
+        return phi, mu_tensor, cov_mat
 
-    def estimate_sample_energy(self, z, phi=None, mu=None, cov_mat=None, average_energy=True):
+    def estimate_sample_energy(self, z_tensor, phi=None, mu_tensor=None, cov_mat=None,
+                            average_energy=True):
         """Sample energy computation.
 
         Args:
-            z (torch.Tensor)                    : _description_
+            z_tensor (torch.Tensor)             : _description_
             phi (torch.Tensor, optional)        : Mixture-component distribution. Defaults to None.
             mu (torch.Tensor, optional)         : Mixture mean. Defaults to None.
             cov_mat (torch.Tensor, optional)    : Mixture covariance. Defaults to None.
@@ -286,11 +331,11 @@ class DAGMMModel(nn.Module, PyTorchUtils):
         """
         if phi is None:
             phi = self.phi
-        if mu is None:
-            mu = self.mu
+        if mu_tensor is None:
+            mu_tensor = self.mu
         if cov_mat is None:
             cov_mat = self.cov_mat
-            
+
 #         k, D, _ = cov_mat.size()
 
 #         z_mu = (z.unsqueeze(1)- mu.unsqueeze(0))
@@ -312,47 +357,47 @@ class DAGMMModel(nn.Module, PyTorchUtils):
 #         cov_inverse = torch.cat(cov_inverse, dim=0)
 #         # K
 #         det_cov = torch.from_numpy(np.float32(np.array(det_cov)))
-        
+
 #         # N x K
-#         exp_term_tmp = -0.5 * torch.sum(torch.sum(z_mu.unsqueeze(-1) * cov_inverse.unsqueeze(0), dim=-2) * z_mu, dim=-1)
+#         exp_term_tmp = -0.5 * torch.sum(torch.sum(z_mu.unsqueeze(-1) * cov_inverse.unsqueeze(0),
+#                          dim=-2) * z_mu, dim=-1)
 #         # for stability (logsumexp)
 #         max_val = torch.max((exp_term_tmp).clamp(min=0), dim=1, keepdim=True)[0]
 
 #         exp_term = torch.exp(exp_term_tmp - max_val)
 
-#         sample_energy = -max_val.squeeze() - torch.log(torch.sum(phi.unsqueeze(0) * exp_term / (torch.sqrt(det_cov)).unsqueeze(0), dim = 1) + eps)
-        
+#         sample_energy = -max_val.squeeze() - torch.log(torch.sum(phi.unsqueeze(0) * exp_term /
+#                           (torch.sqrt(det_cov)).unsqueeze(0), dim = 1) + eps)
+
 #         if average_energy:
 #             sample_energy = torch.mean(sample_energy)
 
 #         return sample_energy, cov_diag
-            
+
         # jc_res = self.estimate_sample_energy_js(z, phi, mu)
 
         # Avoid non-invertible covariance matrix by adding small values (eps)
-        d = z.shape[1]
+        d_tensor = z_tensor.shape[1]
         #eps = self.reg_covar
         eps = torch.abs(torch.min(torch.real(torch.linalg.eigvals(cov_mat)))) + 1e-4
         # eps = 1e-6
-        cov_mat = cov_mat + (torch.eye(d)).to(self.device) * eps
+        cov_mat = cov_mat + (torch.eye(d_tensor)).to(self.device) * eps
         # N x K x D
-        mu_z = z.unsqueeze(1) - mu.unsqueeze(0)
+        mu_z = z_tensor.unsqueeze(1) - mu_tensor.unsqueeze(0)
 
         # scaler
         try:
             inv_cov_mat = torch.cholesky_inverse(torch.linalg.cholesky(cov_mat))
             det_cov_mat = torch.linalg.cholesky(2 * np.pi * cov_mat)
-        except torch.linalg.LinAlgError as e:
-            print(e)
+        except torch.linalg.LinAlgError as exception:
+            print(exception)
             print(cov_mat.shape)
             print(torch.linalg.eigvals(cov_mat), torch.linalg.eigvals(cov_mat).shape)
         # inv_cov_mat = torch.linalg.inv(cov_mat)
-        
+
         # inv_cov_mat = torch.cholesky_inverse(torch.linalg.cholesky(cov_mat))
         # det_cov_mat = torch.linalg.cholesky(2 * np.pi * cov_mat)
-        
 
-        
         det_cov_mat = torch.diagonal(det_cov_mat, dim1=1, dim2=2)
         det_cov_mat = torch.prod(det_cov_mat, dim=1)
 
@@ -381,11 +426,11 @@ class DAGMMModel(nn.Module, PyTorchUtils):
 
         return energy_result, pen_cov_mat
 
-    def compute_loss(self, x, x_prime, energy, pen_cov_mat):
+    def compute_loss(self, x_tensor, x_prime, energy, pen_cov_mat):
         """Loss computation
 
         Args:
-            x (torch.Tensor)            : Input tensor.
+            x_tensor (torch.Tensor)     : Input tensor.
             x_prime (torch.Tensor)      : Reconstructed tensor.
             energy (torch.Tensor)       : Sample energy.
             pen_cov_mat (torch.Tensor)  : Penalization.
@@ -393,20 +438,25 @@ class DAGMMModel(nn.Module, PyTorchUtils):
         Returns:
             torch.Tensor: Batch loss.
         """
-        rec_err = ((x - x_prime) ** 2).mean()
+        rec_err = ((x_tensor - x_prime) ** 2).mean()
         loss = rec_err + self.lambda_1 * energy + self.lambda_2 * pen_cov_mat
 
         return loss
 
     def get_params(self) -> dict:
+        """Get DAGMM parameters.
+
+        Returns:
+            dict.
+        """
         return {
             "lambda_1": self.lambda_1,
             "lambda_2": self.lambda_2,
-            "latent_dim": self.ae.latent_dim,
+            "latent_dim": self.autoencoder.latent_dim,
             "K": self.gmm.K
         }
 
-def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epochs, lr,
+def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epochs, learning_rate,
                             writer, verbose=True):
     """The fitting function of the DAGMM model.
 
@@ -416,7 +466,7 @@ def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epoch
         model (nn.Module)           : The Pytorch model.
         patience (int)              : The number of epochs to wait for early stopping.
         num_epochs (int)            : The max number of epochs.
-        lr (float)                  : The learning rate.
+        learning_rate (float)       : The learning rate.
         writer (SummaryWriter)      : The Tensorboard Summary Writer.
         verbose (bool, optional)    : Defaults to True.
 
@@ -424,8 +474,8 @@ def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epoch
                         [nn.Module ]: The fitted model.
     """
     model.to(model.device)  # .double()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
     model.train()
     #train_loss_by_epoch = []
     #val_loss_by_epoch = []
@@ -436,25 +486,29 @@ def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epoch
     for epoch in trange(num_epochs):
         # If improvement continue training
         if epoch_wo_improv < patience:
-            logging.debug(f'Epoch {epoch + 1}/{num_epochs}.')
+            # logging.debug(f'Epoch {epoch + 1}/{num_epochs}.')
+            logging.debug('Epoch %d/%d.', epoch + 1, num_epochs)
             #if verbose:
                 #GPUtil.showUtilization()
             # Train the model
             #logger.debug("Begin training...")
-            train_loss = train(train_loader, model, optimizer, epoch)
+            train_loss = train(train_loader, model, optimizer)
 
 
             # Get Validation loss
             #logger.debug("Begin evaluation")
-            val_loss = validation(val_loader, model, optimizer, epoch)
-            
+            val_loss = validation(val_loader, model)
+
             if verbose:
-                logger.info(f"Epoch: [{epoch+1}/{num_epochs}] - Train loss: {train_loss:.2f} - Val loss: {val_loss:.2f}")
-            
+                # logger.info(f"Epoch: [{epoch+1}/{num_epochs}] - Train loss: {train_loss:.2f} \
+                #             - Val loss: {val_loss:.2f}")
+                logger.info("Epoch: [%d/%d] - Train loss: %2f - Val loss: %2f",
+                            epoch+1, num_epochs, train_loss, val_loss)
+
             # Write in TensorBoard
             writer.add_scalar('train_loss', train_loss, epoch)
             writer.add_scalar('val_loss', val_loss, epoch)
-            
+
             # Check if the validation loss improve or not
             if val_loss < best_val_loss :
                 best_val_loss = val_loss
@@ -462,39 +516,37 @@ def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epoch
                 best_params = model.state_dict()
             elif val_loss >= best_val_loss:
                 epoch_wo_improv += 1
-            
+
         else:
             # No improvement => early stopping is applied and best model is kept
             model.load_state_dict(best_params)
             break
-            
+
     return model
 
 
-def train(train_loader, model, optimizer, epoch):
+def train(train_loader, model, optimizer):
     """The training step.
 
     Args:
         train_loader (Dataloader)       : The train data loader.
         model (nn.Module)               : The Pytorch model.
         optimizer (torch.optim)         : The Optimizer.
-        epoch (int)                     : The max number of epochs.
 
     Returns:
                 The average loss on the epoch.
     """
     # Compute statistics
     loss_meter = AverageMeter()
-    
-    #
+
     model.train()
     for ts_batch in train_loader:
         ts_batch = ts_batch.float().to(model.device)
 
         # Forward pass
-        code, x_prime, _, z_r, gamma_hat = model(ts_batch)
-        phi, mu, cov_mat = model.compute_params(z_r, gamma_hat)
-        energy_result, pen_cov_mat = model.estimate_sample_energy(z_r, phi, mu, cov_mat)
+        _, x_prime, _, z_r, gamma_hat = model(ts_batch)
+        phi, mu_tensor, cov_mat = model.compute_params(z_r, gamma_hat)
+        energy_result, pen_cov_mat = model.estimate_sample_energy(z_r, phi, mu_tensor, cov_mat)
 
 
         loss = model.compute_loss(ts_batch, x_prime, energy_result, pen_cov_mat)
@@ -510,8 +562,8 @@ def train(train_loader, model, optimizer, epoch):
     #train_loss_by_epoch.append(loss_meter.avg)
 
     return loss_meter.avg
-    
-def validation(val_loader, model, optimizer, epoch):
+
+def validation(val_loader, model):
     """The validation step.
 
     Args:
@@ -526,7 +578,7 @@ def validation(val_loader, model, optimizer, epoch):
 
     # Compute statistics
     loss_meter = AverageMeter()
-    
+
     model.eval()
     #val_loss = []
     with torch.no_grad():
@@ -534,15 +586,15 @@ def validation(val_loader, model, optimizer, epoch):
             ts_batch = ts_batch.float().to(model.device)
 
             # Forward pass
-            code, x_prime, cosim, z_r, gamma_hat = model(ts_batch)
-            phi, mu, cov_mat = model.compute_params(z_r, gamma_hat)
-            energy_result, pen_cov_mat = model.estimate_sample_energy(z_r, phi, mu, cov_mat)
-            
+            _, x_prime, _, z_r, gamma_hat = model(ts_batch)
+            phi, mu_tensor, cov_mat = model.compute_params(z_r, gamma_hat)
+            energy_result, pen_cov_mat = model.estimate_sample_energy(z_r, phi, mu_tensor, cov_mat)
+
             loss = model.compute_loss(ts_batch, x_prime, energy_result, pen_cov_mat)
             #val_loss.append(loss.item()*len(ts_batch))
             loss_meter.update(loss.item())
         return loss_meter.avg
-    
+
 @torch.no_grad()
 def predict_test_scores(model, test_loader, train_phi, train_mu, train_cov_mat):
     """The prediction step.                
@@ -562,8 +614,10 @@ def predict_test_scores(model, test_loader, train_phi, train_mu, train_cov_mat):
     test_z = []
     for ts_batch in test_loader:
         ts_batch = ts_batch.float().to(model.device)
-        code, x_prime, cosim, z_r, gamma_hat = model(ts_batch)
-        energy_result, pen_cov_mat = model.estimate_sample_energy(z_r, train_phi, train_mu, train_cov_mat, average_energy=False)
+        _, _, _, z_r, _ = model(ts_batch)
+        energy_result, _ = model.estimate_sample_energy(z_r, train_phi, train_mu,
+                                                                train_cov_mat,
+                                                                average_energy=False)
         test_energy.append(energy_result.cpu().numpy())
         test_z.append(z_r.cpu().numpy())
 

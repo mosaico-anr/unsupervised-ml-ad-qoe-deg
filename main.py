@@ -1,19 +1,22 @@
-# Copyright (c) 2022 Orange - All rights reserved
-# 
-# Author:  Joël Roman Ky
-# This code is distributed under the terms and conditions of the MIT License (https://opensource.org/licenses/MIT)
-# 
+"""
+Copyright (c) 2022 Orange - All rights reserved
 
-import argparse, time
+Author:  Joël Roman Ky
+This code is distributed under the terms and conditions
+of the MIT License (https://opensource.org/licenses/MIT)
+"""
+
+import argparse
+import time
 import os
 
 import torch
 
-from src.models.anomaly_pca import Anomaly_PCA
-from src.models.oc_svm import OC_SVM
+from src.models.anomaly_pca import AnomalyPCA
+from src.models.oc_svm import OCSVM
 from src.models.iforest import IForest
 from src.models.auto_encoder import AutoEncoder
-from src.models.lstm_vae import LSTM_VAE_Algo
+from src.models.lstm_vae import LSTMVAEAlgo
 from src.models.dagmm import DAGMM
 from src.models.deep_svd import DeepSVDD
 from src.models.usad import USAD
@@ -22,10 +25,11 @@ from src.utils.data_processing import data_processing
 from src.utils.evaluation_utils import get_best_score, get_performance
 
 all_models = ['PCA', 'OC-SVM', 'IForest', 'AE', 'LSTM-VAE', 'DAGMM', 'Deep-SVDD', 'USAD']
-all_algo = [Anomaly_PCA, OC_SVM, IForest, AutoEncoder, LSTM_VAE_Algo, DAGMM, DeepSVDD, USAD]
+all_algo = [AnomalyPCA, OCSVM, IForest, AutoEncoder, LSTMVAEAlgo, DAGMM, DeepSVDD, USAD]
 assert(len(all_models) == len(all_algo))
 models_algo_name_map = {all_models[i]: all_algo[i] for i in range(len(all_models))}
-metrics_list = ['pw', 'window_wad', 'window_pa', 'window_rpa']
+metrics_list = ['pw', 'window_wad', 'window_pa', 'window_pak', 'window_rpa']
+platforms = ['std', 'gfn', 'xc']
 
 def parse_arguments():
     """Command line parser.
@@ -36,25 +40,30 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model-name', type=str, choices=all_models,
                         required=True, help='The model to train and test.')
-    parser.add_argument('--window-size', type=int, default=10, 
+    parser.add_argument('--window-size', type=int, default=10,
                         help='The window size. Default is 10.')
-    parser.add_argument('--contamination-ratio', type=float, default=0.0, 
+    parser.add_argument('--contamination-ratio', type=float, default=0.0,
                         help='The contamination ratio. Default is 0.')
-    parser.add_argument('--seed', type=int, default=42, 
+    parser.add_argument('--seed', type=int, default=42,
                         help='The random generator seed. Default is 42.')
     parser.add_argument('--model-save-path', type=str, default='data/outputs/',
                         help='The folder to store the model outputs.')
     parser.add_argument('--data-dir', type=str, default='data/outputs_csv/',
                         help='The folder where the data are stored.')
-    parser.add_argument('--threshold', type=float, default=0.8, 
-                        help='The threshold of anomalous observations to consider in a window. Default is 0.8.')
+    parser.add_argument('--platform', type=str, default='std', choices=platforms,
+                        help='The platform data to use. Default is std.')
+    parser.add_argument('--threshold', type=float, default=0.8,
+                        help='The threshold of anomalous observations to consider in a window. \
+                            Default is 0.8.')
+    parser.add_argument('--wad-threshold', type=float, default=0.8,
+                        help='WAD approach (alpha) threshold. Default is 0.8.')
     parser.add_argument('--metric', type=str, default='window_wad', choices=metrics_list,
                         required=True, help='The metric to use for evaluation.')
     parser.add_argument('--is-trained', action='store_true',
                         help='If the models are already trained. Default action is false.')
 
     return parser.parse_args()
-            
+
 def main(args):
     """Main function
 
@@ -62,7 +71,9 @@ def main(args):
         args : Command-line arguments.
     """
     model_name = args.model_name
+    wad_threshold = args.wad_threshold
     contamination_ratio = args.contamination_ratio
+    platform = args.platform
     window_size = args.window_size
     seed = args.seed
     data_dir = args.data_dir
@@ -76,17 +87,24 @@ def main(args):
     # Check if the threshold is between 0 and 1
     if (threshold<=1 and threshold>=0):
         threshold_int = int(window_size*threshold)
+        wad_threshold_int = int(window_size*wad_threshold)
         print(threshold_int)
     else:
         raise ValueError("The threshold must be a float between 0 and 1 !")
 
     if model_name not in all_models:
-        raise ValueError(f"This model : {model_name} is not implemented.\n Must be in {all_models}.")
-    
+        raise ValueError(f"This model : {model_name} is not implemented. \
+                        \n Must be in {all_models}.")
+
     print('Data loading...')
     # Get the data
-    data_random, categorical_ind = data_processing(data_dir, window_size=window_size, contamination_ratio=contamination_ratio,
-                                                    seed=seed, threshold=threshold_int, is_consecutive=False)
+    data_random, categorical_ind = data_processing(data_dir, window_size=window_size,
+                                                contamination_ratio=contamination_ratio,
+                                                seed=seed,
+                                                platform=platform,
+                                                threshold=threshold_int,
+                                                wad_threshold=wad_threshold_int,
+                                                is_consecutive=False)
     model_alg = models_algo_name_map.get(model_name)
     is_torch_model = model_name not in ['OC-SVM', 'IForest', 'PCA']
 
@@ -97,7 +115,8 @@ def main(args):
         saved_model_filename = f'{model_save_path}model'
         additional_params_filename = f'{model_save_path}additional_params'
         model = load_torch_algo(model_alg, algo_config_filename, saved_model_filename,
-                                    additional_params_filename, eval=True, torch_model=is_torch_model)
+                                    additional_params_filename, evaluation=True,
+                                    torch_model=is_torch_model)
     else:
         gpu_args = {"gpu":0 if torch.cuda.is_available() else None}
 
@@ -114,7 +133,7 @@ def main(args):
         train_time = time.time() - start
 
         # Save the model
-        if not (os.path.isdir(model_save_path)):
+        if not os.path.isdir(model_save_path):
             os.mkdir(model_save_path)
         save_torch_algo(model, model_save_path, torch_model=is_torch_model)
 
@@ -129,33 +148,41 @@ def main(args):
         metric, window_type = metric.split('_')
     else:
         window_type = 'wad'
-    
+
     if model_name in ['OC-SVM', 'IForest']:
-        
+
         #score_norm = model_score
         y_pred = an_dict['anomalies']
 
 
         #print(score_norm.shape, y_pred.shape)
-        precision, recall, f1, auc, mcc, acc_anom, acc_norm = get_performance(y_pred, y_true=data_random['test']['labels'],
-                                                    test_score=model_score, y_win_adjust=data_random['test']['window_adjust'],
-                                                    metric_type=metric, window_type=window_type)
-        
+        precision, recall, f1_score, auc, mcc, acc_anom, acc_norm = \
+            get_performance(y_pred, y_true=data_random['test']['labels'],
+                            test_score=model_score,
+                            y_win_adjust=data_random['test']['window_adjust'],
+                            metric_type=metric,
+                            window_type=window_type)
+
     elif model_name in ['PCA']:
-        # Reconstruction-based model compute the test score based on the best threshold                     
+        # Reconstruction-based model compute the test score based on the best threshold
         score_norm = model_score.mean(axis=1)
         score_norm.reshape(score_norm.shape[0],-1)
-        precision, recall, f1, auc, mcc, acc_anom, acc_norm = get_best_score(test_score=score_norm, y_true=data_random['test']['labels'],
-                                    y_win_true=data_random['test']['window_labels'],
-                                    y_win_adjust=data_random['test']['window_adjust'],
-                                    val_ratio=0.2, n_pertiles=100, metric_type=metric, window_type=window_type)
+        precision, recall, f1_score, auc, mcc, acc_anom, acc_norm = \
+            get_best_score(test_score=score_norm,
+                        y_true=data_random['test']['labels'],
+                        y_win_true=data_random['test']['window_labels'],
+                        y_win_adjust=data_random['test']['window_adjust'],
+                        val_ratio=0.2, n_pertiles=100,
+                        metric_type=metric, window_type=window_type)
     else:
         #score_norm = model_score
         score_norm = model_score.reshape(model_score.shape[0],-1)
-        precision, recall, f1, auc, mcc, acc_anom, acc_norm = get_best_score(test_score=score_norm, y_true=data_random['test']['labels'],
-                                    y_win_true=data_random['test']['window_labels'],
-                                    y_win_adjust=data_random['test']['window_adjust'],
-                                    val_ratio=0.2, n_pertiles=100, metric_type=metric, window_type=window_type)
+        precision, recall, f1_score, auc, mcc, acc_anom, acc_norm = \
+            get_best_score(test_score=score_norm, y_true=data_random['test']['labels'],
+                        y_win_true=data_random['test']['window_labels'],
+                        y_win_adjust=data_random['test']['window_adjust'],
+                        val_ratio=0.2, n_pertiles=100,
+                        metric_type=metric, window_type=window_type)
     if metric == 'window':
         metric = f'{metric}_{window_type}'
 
@@ -170,7 +197,7 @@ def main(args):
     print(f"Results for {metric} metric")
     print(f"Precision : {precision:.4f}")
     print(f"Recall : {recall:.4f}")
-    print(f"F1-score : {f1:.4f}")
+    print(f"F1-score : {f1_score:.4f}")
     print(f"MCC : {mcc:.4f}")
     print(f"AUC : {auc:.4f}")
     print(f"Accuracy normal : {acc_norm:.4f}")
@@ -180,7 +207,6 @@ def main(args):
 
 
 
-    
 if __name__ == '__main__':
-    args = parse_arguments()
-    main(args)
+    arguments = parse_arguments()
+    main(arguments)

@@ -1,8 +1,10 @@
-# Copyright (c) 2022 Orange - All rights reserved
-# 
-# Author:  Joël Roman Ky
-# This code is distributed under the terms and conditions of the MIT License (https://opensource.org/licenses/MIT)
-# 
+"""
+Copyright (c) 2022 Orange - All rights reserved
+
+Author:  Joël Roman Ky
+This code is distributed under the terms and conditions
+of the MIT License (https://opensource.org/licenses/MIT)
+"""
 
 import numpy as np
 import pandas as pd
@@ -14,17 +16,21 @@ from sklearn.compose import ColumnTransformer
 from src.utils.algorithm_utils import Algorithm
 
 
-class Anomaly_PCA(Algorithm):
-    def __init__(self, name='PCA', seed: int=None, n_components=0.9, save_dir=None, multi_outputs=True):
+class AnomalyPCA(Algorithm):
+    """PCA Algorithm.
+    """
+    def __init__(self, name='PCA', seed: int=None, n_components=0.9,
+                save_dir=None,
+                multi_outputs=True):
         """Anomaly PCA reconstruction algorithm for anomaly detection.
 
         Args:
             name (str, optional)            : Algorithm's name. Defaults to 'PCA'.
             seed (int, optional)            : Random seed. Defaults to None.
             n_components (float, optional)  : Number of principal components to keep.
-                                              Defaults to 0.9.
+                                                Defaults to 0.9.
             save_dir (str, optional)        : Folder to save the outputs.
-                                              Defaults to None.
+                                                Defaults to None.
         """
         Algorithm.__init__(self, __name__, name, seed=seed)
         self.model = None
@@ -37,7 +43,6 @@ class Anomaly_PCA(Algorithm):
         self.additional_params = {}
         self.save_dir = save_dir
 
-        
 
     def fit(self, train_data: np.array, categorical_columns=None):
         """Fit the model.
@@ -53,7 +58,7 @@ class Anomaly_PCA(Algorithm):
             numerical_columns = np.setdiff1d(all_columns, np.array(categorical_columns))
         else:
             numerical_columns = all_columns.copy()
-       
+
         # Create the preprocessing steps
         numerical_processor = StandardScaler()
         if categorical_columns is not None:
@@ -64,11 +69,11 @@ class Anomaly_PCA(Algorithm):
             ])
         else :
             processor = numerical_processor
-            
-        # Fit the model and get error reconstruction on the training datasets 
+
+        # Fit the model and get error reconstruction on the training datasets
         self.model = Pipeline([('processor', processor),
-                          ('pca', PCA(n_components=self.n_components))
-                         ])
+                            ('pca', PCA(n_components=self.n_components))
+                            ])
         print("Fitting PCA model")
         #train_data = train_data.values
         if self.multi_outputs:
@@ -77,20 +82,20 @@ class Anomaly_PCA(Algorithm):
             train_data = train_data.reshape(train_data.shape[0],-1)
         self.model.fit(X=train_data)
         print("Fitting done !")
-        
-        #recons_train = np.dot(self.model.transform(train_data), self.model['pca'].components_) + self.model['pca'].mean_
+
+        #recons_train = np.dot(self.model.transform(train_data), self.model['pca'].components_)
+        # + self.model['pca'].mean_
         #recons_train = self.model['scaler'].inverse_transform(recons_train)
         recons_train = self.model.inverse_transform(self.model.transform(train_data))
-        
-        
+
         # Get the reconstruction error on the training datasets
         recons_error = (train_data - recons_train)**2
-        
+
         # Save min and max error for normalization of test errors.
         self.additional_params['train_error_mean'] = np.mean(recons_error, axis=0)
         self.additional_params['train_error_std'] = np.std(recons_error, axis=None)
 
-    
+
     def anomaly_vector_construction(self, test_recons_errors, norm=2, sigma=3,
                                     return_anomalies_score=False):
         """Apply the 3-sigma threshold to build anomaly vector prediction.
@@ -99,8 +104,9 @@ class Anomaly_PCA(Algorithm):
             test_recons_errors (np.array): Reconstruction error vectors.
             norm (int, optional): The norm to used for normalization. Defaults to 2.
             sigma (int, optional): Sigma multiplicator coefficient. Defaults to 3.
-            return_anomalies_score (bool, optional): If the normalized anomaly score must be returned.
-                                                     Defaults to False.
+            return_anomalies_score (bool, optional): If the normalized anomaly score 
+                                                    must be returned. 
+                                                    Defaults to False.
 
         Returns:
             np.array: Anomaly vector.
@@ -110,7 +116,7 @@ class Anomaly_PCA(Algorithm):
         try:
             train_std_err = self.additional_params['train_error_std']
             train_mean_err = self.additional_params['train_error_mean']
-            
+
             test_norm = test_recons_errors - train_mean_err
 
             if norm == 1:
@@ -121,7 +127,7 @@ class Anomaly_PCA(Algorithm):
                 print("Norm not implemented")
 
             # Create anomalies vectors
-            anomalies = (test_norm <= sigma*train_std_err)
+            anomalies = test_norm <= sigma*train_std_err
             anomalies = np.array(list(map(lambda val : 0 if val else 1, anomalies)))
             return anomalies, test_norm if return_anomalies_score else anomalies
         except ValueError:
@@ -141,12 +147,11 @@ class Anomaly_PCA(Algorithm):
             test_data = test_data.reshape(-1, test_data.shape[-1])
         else:
             test_data = test_data.reshape(test_data.shape[0],-1)
-        
+
         recons = self.model.inverse_transform(self.model.transform(test_data))
 
-        
         # Compute the reconstruction error
-        if type(test_data) == pd.DataFrame:
+        if isinstance(test_data, pd.DataFrame):
             recons_error = (test_data - recons) ** 2
         else:
             recons_error = (test_data - recons) ** 2

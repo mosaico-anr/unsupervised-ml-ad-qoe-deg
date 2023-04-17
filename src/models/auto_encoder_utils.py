@@ -1,10 +1,13 @@
-# Copyright (c) 2022 Orange - All rights reserved
-# 
-# Author:  Joël Roman Ky
-# This code is distributed under the terms and conditions of the MIT License (https://opensource.org/licenses/MIT)
-# 
+"""
+Copyright (c) 2022 Orange - All rights reserved
 
-import logging, sys
+Author:  Joël Roman Ky
+This code is distributed under the terms and conditions
+of the MIT License (https://opensource.org/licenses/MIT)
+"""
+
+import logging
+import sys
 
 import numpy as np
 import torch
@@ -21,8 +24,10 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
 class AutoEncoderModel(nn.Module, PyTorchUtils):
+    """AutoEncoder model.
+    """
     def __init__(self, input_length: int,
-                 hidden_size: int, seed: int, gpu: int):
+                hidden_size: int, seed: int, gpu: int):
         """Auto-Encoder model architecture.
 
         Args:
@@ -31,21 +36,26 @@ class AutoEncoderModel(nn.Module, PyTorchUtils):
             seed (int)                  : The random generator seed.
             gpu (int)                   : The number of the GPU device.
         """
-        # Each point is a flattened window and thus has as many features as sequence_length * features
+        # Each point is a flattened window and thus has as many features
+        # as sequence_length * features
         super().__init__()
         PyTorchUtils.__init__(self, seed, gpu)
         # input_length = n_features * sequence_length
 
         # creates powers of two between eight and the next smaller power from the input_length
-        dec_steps = 2 ** np.arange(max(np.ceil(np.log2(hidden_size)), 2), np.log2(input_length))[1:]
-        dec_setup = np.concatenate([[hidden_size], dec_steps.repeat(2), [input_length]])
+        dec_steps = 2 ** np.arange(max(np.ceil(np.log2(hidden_size)), 2),
+                                    np.log2(input_length))[1:]
+        dec_setup = np.concatenate([[hidden_size], dec_steps.repeat(2),
+                                    [input_length]])
         enc_setup = dec_setup[::-1]
 
-        layers = np.array([[nn.Linear(int(a), int(b)), nn.Tanh()] for a, b in enc_setup.reshape(-1, 2)]).flatten()[:-1]
+        layers = np.array([[nn.Linear(int(a), int(b)), nn.Tanh()]
+                        for a, b in enc_setup.reshape(-1, 2)]).flatten()[:-1]
         self._encoder = nn.Sequential(*layers)
         self.to_device(self._encoder)
 
-        layers = np.array([[nn.Linear(int(a), int(b)), nn.Tanh()] for a, b in dec_setup.reshape(-1, 2)]).flatten()[:-1]
+        layers = np.array([[nn.Linear(int(a), int(b)), nn.Tanh()]
+                        for a, b in dec_setup.reshape(-1, 2)]).flatten()[:-1]
         self._decoder = nn.Sequential(*layers)
         self.to_device(self._decoder)
 
@@ -55,7 +65,7 @@ class AutoEncoderModel(nn.Module, PyTorchUtils):
         Args:
             ts_batch        : The batch input.
             return_latent   : If the latent vector must be returned. 
-                              Defaults to False.
+                            Defaults to False.
 
         Returns:
                 The reconstructed batch.
@@ -65,9 +75,8 @@ class AutoEncoderModel(nn.Module, PyTorchUtils):
         dec = self._decoder(enc)
         reconstructed_sequence = dec.view(ts_batch.size())
         return (reconstructed_sequence, enc) if return_latent else reconstructed_sequence
-    
-    
-def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epochs, lr,
+
+def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epochs, learning_rate,
                             writer, verbose=True):
     """The fitting function of the Auto Encoder.
 
@@ -77,7 +86,7 @@ def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epoch
         model (nn.Module)           : The Pytorch model.
         patience (int)              : The number of epochs to wait for early stopping.
         num_epochs (int)            : The max number of epochs.
-        lr (float)                  : The learning rate.
+        learning_rate (float)       : The learning rate.
         writer (SummaryWriter)      : The Tensorboard Summary Writer.
         verbose (bool, optional)    : Defaults to True.
 
@@ -85,8 +94,8 @@ def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epoch
                         [nn.Module ]: The fitted model.
     """
     model.to(model.device)  # .double()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
     model.train()
     #train_loss_by_epoch = []
     #val_loss_by_epoch = []
@@ -97,25 +106,29 @@ def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epoch
     for epoch in trange(num_epochs):
         # If improvement continue training
         if epoch_wo_improv < patience:
-            logging.debug(f'Epoch {epoch + 1}/{num_epochs}.')
+            # logging.debug(f'Epoch {epoch + 1}/{num_epochs}.')
+            logging.debug('Epoch %d/%d.', epoch + 1, num_epochs)
             #if verbose:
                 #GPUtil.showUtilization()
             # Train the model
             #logger.debug("Begin training...")
-            train_loss = train(train_loader, model, optimizer, epoch)
+            train_loss = train(train_loader, model, optimizer)
 
 
             # Get Validation loss
             #logger.debug("Begin evaluation")
-            val_loss = validation(val_loader, model, optimizer, epoch)
-            
+            val_loss = validation(val_loader, model)
+
             if verbose:
-                logger.info(f"Epoch: [{epoch+1}/{num_epochs}] - Train loss: {train_loss:.2f} - Val loss: {val_loss:.2f}")
-            
+                # logger.info(f"Epoch: [{epoch+1}/{num_epochs}] - Train loss: {train_loss:.2f} - \
+                #             Val loss: {val_loss:.2f}")
+                logger.info("Epoch: [%d/%d] - Train loss: %2f - Val loss: %2f",
+                            epoch+1, num_epochs, train_loss, val_loss)
+
             # Write in TensorBoard
             writer.add_scalar('train_loss', train_loss, epoch)
             writer.add_scalar('val_loss', val_loss, epoch)
-            
+
             # Check if the validation loss improve or not
             if val_loss < best_val_loss :
                 best_val_loss = val_loss
@@ -123,12 +136,12 @@ def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epoch
                 best_params = model.state_dict()
             elif val_loss >= best_val_loss:
                 epoch_wo_improv += 1
-            
+
         else:
             # No improvement => early stopping is applied and best model is kept
             model.load_state_dict(best_params)
             break
-            
+
     # Reconstruct on validation data
     model.eval()
     val_reconstr_errors = []
@@ -143,7 +156,7 @@ def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epoch
     return model, val_reconstr_errors
 
 
-def train(train_loader, model, optimizer, epoch):
+def train(train_loader, model, optimizer):
     """The training step.
 
     Args:
@@ -157,8 +170,7 @@ def train(train_loader, model, optimizer, epoch):
     """
     # Compute statistics
     loss_meter = AverageMeter()
-    
-    #
+
     model.train()
     for ts_batch in train_loader:
         ts_batch = ts_batch.float().to(model.device)
@@ -176,8 +188,8 @@ def train(train_loader, model, optimizer, epoch):
     #train_loss_by_epoch.append(loss_meter.avg)
 
     return loss_meter.avg
-    
-def validation(val_loader, model, optimizer, epoch):
+
+def validation(val_loader, model):
     """The validation step.
 
     Args:
@@ -192,7 +204,7 @@ def validation(val_loader, model, optimizer, epoch):
 
     # Compute statistics
     loss_meter = AverageMeter()
-    
+
     model.eval()
     #val_loss = []
     with torch.no_grad():
@@ -204,7 +216,7 @@ def validation(val_loader, model, optimizer, epoch):
             #val_loss.append(loss.item()*len(ts_batch))
             loss_meter.update(loss.item())
         return loss_meter.avg
-    
+
 @torch.no_grad()
 def predict_test_scores(model, test_loader, latent=False):
     """The prediction step.
@@ -220,7 +232,6 @@ def predict_test_scores(model, test_loader, latent=False):
     model.eval()
     reconstr_scores = []
     latent_points = []
-    outputs_array = []
     for ts_batch in test_loader:
         ts_batch = ts_batch.float().to(model.device)
         if latent:

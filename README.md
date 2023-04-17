@@ -18,7 +18,12 @@ The paper is under review at the Special Issue on Robust and Reliable Networks o
 
 ## Datasets
 
-The datasets can be download on [this link](https://cloud-gaming-traces.lhs.loria.fr/ANR-19-CE25-0012_stadia_cg_webrtc_metrics.tar.xz).  
+The datasets used in this paper are from 03 Cloud Gaming platforms: 
+  - [Google Stadia](https://stadia.google.com/gg/)
+  - [NVIDIA GeForceNow](https://www.nvidia.com/fr-fr/geforce-now/)
+  - [Microsoft XCloud](https://www.xbox.com/fr-FR/cloud-gaming)
+  
+  They can be download on [this link](https://cloud-gaming-traces.lhs.loria.fr/ANR-19-CE25-0012_stadia_cg_webrtc_metrics.tar.xz).  
 Download and unzip the file in the data folder.
 
 ```bash
@@ -40,17 +45,16 @@ The main dependencies are the following:
 
 ## Installation
 
-By assuming that conda is installed, you can run this to install the required dependencies.
+We first recommand you to create a Python env to install the required packages.
 
 ```bash
-conda create --name [ENV_NAME] python=3.8
-conda activate [ENV_NAME]
+python -m venv [ENV_NAME] python=3.8
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-Install Python modules
+Install Python modules to avoid absolute import errors.
 
 ```bash
 python setup.py install --user
@@ -62,12 +66,12 @@ From the root of the repository, the usage of the main file can be seen by runni
 python -m main --help
 ```
 
-This will output the following parameters to run the main program.
+This will output the following parameters to run the main program that allow you to test each of the eight models used in the paper.
 
 ```bash
-usage: main.py [-h] --model-name {PCA,OC-SVM,IForest,AE,LSTM-VAE,DAGMM,Deep-SVDD,USAD} [--window-size WINDOW_SIZE]
-               [--contamination-ratio CONTAMINATION_RATIO] [--seed SEED] [--model-save-path MODEL_SAVE_PATH] [--data-dir DATA_DIR]
-               [--threshold THRESHOLD] --metric {pw,window_wad,window_pa,window_rpa} [--is-trained]
+usage: main.py [-h] --model-name {PCA,OC-SVM,IForest,AE,LSTM-VAE,DAGMM,Deep-SVDD,USAD} [--window-size WINDOW_SIZE] [--contamination-ratio CONTAMINATION_RATIO]
+               [--seed SEED] [--model-save-path MODEL_SAVE_PATH] [--data-dir DATA_DIR] [--platform {std,gfn,xc}] [--threshold THRESHOLD]
+               [--wad-threshold WAD_THRESHOLD] --metric {pw,window_wad,window_pa,window_pak,window_rpa} [--is-trained]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -81,14 +85,55 @@ optional arguments:
   --model-save-path MODEL_SAVE_PATH
                         The folder to store the model outputs.
   --data-dir DATA_DIR   The folder where the data are stored.
+  --platform {std,gfn,xc}
+                        The platform data to use. Default is std.
   --threshold THRESHOLD
                         The threshold of anomalous observations to consider in a window. Default is 0.8.
-  --metric {pw,window_wad,window_pa,window_rpa}
+  --wad-threshold WAD_THRESHOLD
+                        WAD approach (alpha) threshold. Default is 0.8.
+  --metric {pw,window_wad,window_pa,window_pak,window_rpa}
                         The metric to use for evaluation.
   --is-trained          If the models are already trained. Default action is false.
+
 ```
 
-The hyper-parameters of each model used in the paper are the default parameters in the code. They can be seen or changed in their respective code file (`src\models\[model_name].py`).
+The hyper-parameters of each model used in the paper are the default parameters in the code. They can be seen or changed in their respective code file (`src/models/[model_name].py`).
+
+## Papers experiments
+
+To reproduce the experiments of the paper, refer to `src/experiments/` folder.
+You can for instance, reproduce the experiments of data contamination impact using `src/experiments/data_contamination.py` file as follows:
+```bash
+python -m src.experiments.data_contamination 
+```
+
+The aforementioned file take the following arguments from command line.
+
+```bash
+usage: data_contamination.py [-h] [--window-size WINDOW_SIZE] [--threshold THRESHOLD] [--wad-threshold WAD_THRESHOLD] [--contamination-ratio CONTAMINATION_RATIO]
+                             [--platform {std,gfn,xc}] [--n-runs N_RUNS] [--models-list [{PCA,IForest,OC-SVM,AE,Deep-SVDD,USAD,DAGMM,LSTM-VAE} ...]]
+                             [--save-dir SAVE_DIR] [--data-dir DATA_DIR] [--is-trained]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --window-size WINDOW_SIZE
+                        The window size. Default is 10.
+  --threshold THRESHOLD
+                        The threshold of anomalous observations to consider in a window. Default is 0.8.
+  --wad-threshold WAD_THRESHOLD
+                        WAD approach (alpha) threshold. Default is 0.8.
+  --contamination-ratio CONTAMINATION_RATIO
+                        The contamination ratio. Default is 0.
+  --platform {std,gfn,xc}
+                        The platform data to use. Default is std.
+  --n-runs N_RUNS       The number of time each experiment is runned. Default is 5.
+  --models-list [{PCA,IForest,OC-SVM,AE,Deep-SVDD,USAD,DAGMM,LSTM-VAE} ...]
+                        The list of models to evaluate.
+  --save-dir SAVE_DIR   The folder to store the model outputs.
+  --data-dir DATA_DIR   The folder where the data are stored.
+  --is-trained          If the models are already trained. Default action is false.
+
+```
 
 ## Example
 
@@ -111,7 +156,6 @@ python main.py --model-name USAD --contamination-ratio 0.05 --window-size 10 --t
 └── src
     ├── experiments
     │   ├── data_contamination.py
-    │   ├── metric_impact.py
     │   └── metric_quality.py
     ├── __init__.py
     ├── models
@@ -136,5 +180,6 @@ python main.py --model-name USAD --contamination-ratio 0.05 --window-size 10 --t
         ├── algorithm_utils.py
         ├── data_processing.py
         ├── evaluation_utils.py
+        ├── window.py
         └── __init__.py
 ```

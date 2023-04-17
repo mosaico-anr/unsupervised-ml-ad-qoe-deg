@@ -1,13 +1,17 @@
-# Copyright (c) 2022 Orange - All rights reserved
-# 
-# Author:  Joël Roman Ky
-# This code is distributed under the terms and conditions of the MIT License (https://opensource.org/licenses/MIT)
-# 
+"""
+Copyright (c) 2022 Orange - All rights reserved
+
+Author:  Joël Roman Ky
+This code is distributed under the terms and conditions
+of the MIT License (https://opensource.org/licenses/MIT)
+"""
+
+import logging
+import sys
 
 import numpy as np
 import torch
 import torch.nn as nn
-import logging, sys, time
 from tqdm import trange
 
 from src.utils.algorithm_utils import PyTorchUtils, AverageMeter
@@ -18,7 +22,9 @@ logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
-class LSTM_Encoder(nn.Module):
+class LSTMEncoder(nn.Module):
+    """LSTM VAE Encoder Architecture.
+    """
     def __init__(self, n_features, lstm_dim, hidden_size):
         """The LSTM VAE Encoder.
 
@@ -32,12 +38,12 @@ class LSTM_Encoder(nn.Module):
         self.softplus = nn.Softplus()
         self.enc_linear_mean = nn.Linear(in_features=lstm_dim, out_features=hidden_size)
         self.enc_linear_sigma = nn.Linear(in_features=lstm_dim, out_features=hidden_size)
-        
-    def reparameterize(self, mu, log_var):
-        """[summary]
+
+    def reparameterize(self, mu_tensor, log_var):
+        """Sample from a random distribution.
 
         Args:
-            mu      : The mean from the encoder's latent space.
+            mu_tensor : The mean from the encoder's latent space.
             log_var : The log variance from the encoder's latent space.
 
         Returns:
@@ -45,9 +51,9 @@ class LSTM_Encoder(nn.Module):
         """
         std = torch.exp(0.5*log_var) # standard deviation
         eps = torch.randn_like(std) # `randn_like` as we need the same size
-        sample = mu + (eps * std) # sampling as if coming from the input space
+        sample = mu_tensor + (eps * std) # sampling as if coming from the input space
         return sample
-        
+
     def forward(self, batch):
         """Forward function of the encoder.
 
@@ -61,10 +67,12 @@ class LSTM_Encoder(nn.Module):
         lstm_outputs = self.softplus(lstm_outputs)
         z_mean = self.enc_linear_mean(lstm_outputs)
         z_logvar = self.enc_linear_sigma(lstm_outputs)
-        z = self.reparameterize(z_mean, z_logvar)
-        return z_mean, z_logvar, z
-    
-class LSTM_Decoder(nn.Module):
+        z_tensor = self.reparameterize(z_mean, z_logvar)
+        return z_mean, z_logvar, z_tensor
+
+class LSTMDecoder(nn.Module):
+    """LSTM VAE Decoder Architecture.
+    """
     def __init__(self, n_features, lstm_dim, hidden_size):
         """The LSTM VAE Decoder.
 
@@ -79,7 +87,7 @@ class LSTM_Decoder(nn.Module):
         self.dec_linear_mean = nn.Linear(in_features=lstm_dim, out_features=n_features)
         self.dec_linear_sigma = nn.Linear(in_features=lstm_dim, out_features=n_features)
         self.tanh = nn.Tanh()
-        
+
     def forward(self, batch):
         """Forward function of the decoder.
 
@@ -96,7 +104,9 @@ class LSTM_Decoder(nn.Module):
         z_logvar = self.tanh(z_logvar)
         return z_mean, z_logvar
 
-class LSTM_VAE(nn.Module, PyTorchUtils):
+class LSTMVAE(nn.Module, PyTorchUtils):
+    """LSTM VAE Architecture.
+    """
     def __init__(self, n_features, hidden_size, lstm_dim, seed, gpu):
         """[summary]
 
@@ -110,10 +120,9 @@ class LSTM_VAE(nn.Module, PyTorchUtils):
         #super(LSTM_VAE, self).__init__()
         super().__init__()
         PyTorchUtils.__init__(self, seed, gpu)
-        self.encoder = LSTM_Encoder(n_features, lstm_dim, hidden_size)
-        self.decoder = LSTM_Decoder(n_features, lstm_dim, hidden_size)
-        
-        
+        self.encoder = LSTMEncoder(n_features, lstm_dim, hidden_size)
+        self.decoder = LSTMDecoder(n_features, lstm_dim, hidden_size)
+
     def forward(self, batch):
         """Forward function of the decoder.
 
@@ -123,11 +132,11 @@ class LSTM_VAE(nn.Module, PyTorchUtils):
         Returns:
             The mean, the log variance.
         """
-        mu_z, logvar_z, z = self.encoder(batch)
-        mu_x, sigma_x = self.decoder(z)
+        mu_z, logvar_z, z_tensor = self.encoder(batch)
+        mu_x, sigma_x = self.decoder(z_tensor)
         var_z = torch.exp(logvar_z)
         #print(f'mu_x, sigma_x forward shape 1 = {mu_x.shape}, {sigma_x.shape}')
-        
+
         # Compute Kullback-Leibler divergence
         kl_loss = -0.5*torch.sum(1 + logvar_z - var_z - torch.square(mu_z))
         #print(f'kl forward shape 1 = {kl_loss.shape}')
@@ -139,10 +148,10 @@ class LSTM_VAE(nn.Module, PyTorchUtils):
         dist = torch.distributions.normal.Normal(loc=mu_x, scale=sigma_norm)
         log_px = -dist.log_prob(batch)
         #print(f'log_px forward shape 1 = {log_px.shape}')
-        
+
         return mu_x, sigma_x, log_px, kl_loss
-    
-    def reconstruct_loss(self, x, mu_x, sigma_x):
+
+    def reconstruct_loss(self, x_tensor, mu_x, sigma_x):
         """The reconstruction loss
 
         Args:
@@ -154,7 +163,8 @@ class LSTM_VAE(nn.Module, PyTorchUtils):
                 The reconstruction loss. 
         """
         var_x = torch.square(sigma_x)
-        reconst_loss = -0.5 * torch.sum(torch.log(var_x)) + torch.sum(torch.square(x - mu_x) / var_x)
+        reconst_loss = -0.5 * torch.sum(torch.log(var_x)) + \
+                    torch.sum(torch.square(x_tensor - mu_x) / var_x)
         # print(f'mu shape = {mu_x.shape}')
         # print(f'sigma shape = {sigma_x.shape}')
         # print(f'x shape = {x.shape}')
@@ -171,13 +181,13 @@ class LSTM_VAE(nn.Module, PyTorchUtils):
         Returns:
                 The mean log likelihood.
         """
-        
+
         #log_px = log_px.view(log_px.shape[0], -1)
         mean_log_px = torch.mean(log_px)
         return mean_log_px #.mean(dim=0)
 
 
-def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epochs, lr,
+def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epochs, learning_rate,
                             writer, verbose=True):
     """The fitting function of the LSTM VAE.
 
@@ -187,7 +197,7 @@ def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epoch
         model (nn.Module)           : The Pytorch model.
         patience (int)              : The number of epochs to wait for early stopping.
         num_epochs (int)            : The max number of epochs.
-        lr (float)                  : The learning rate.
+        learning_rate (float)       : The learning rate.
         writer (SummaryWriter)      : The Tensorboard Summary Writer.
         verbose (bool, optional)    : Defaults to True.
 
@@ -195,63 +205,67 @@ def fit_with_early_stopping(train_loader, val_loader, model, patience, num_epoch
                         [nn.Module ]: The fitted model.
     """
     model.to(model.device)  # .double()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
     model.train()
     #train_loss_by_epoch = []
     #val_loss_by_epoch = []
     best_val_loss = np.inf
-    best_val_epoch = 0
     epoch_wo_improv = 0
     best_params = model.state_dict()
     # assuming first batch is complete
     for epoch in trange(num_epochs):
         # If improvement continue training
         if epoch_wo_improv < patience:
-            logging.debug(f'Epoch {epoch + 1}/{num_epochs}.')
+            # logging.debug(f'Epoch {epoch + 1}/{num_epochs}.')
+            logging.debug('Epoch %d/%d.', epoch + 1, num_epochs)
             #if verbose:
                 #GPUtil.showUtilization()
             # Train the model
             #logger.debug("Begin training...")
-            train_loss, train_log_likehood, train_kl_loss, train_recons_loss = train(train_loader, model, optimizer, epoch)
+            train_loss, train_log_likehood, train_kl_loss, train_recons_loss = \
+                train(train_loader, model, optimizer)
 
 
             # Get Validation loss
             #logger.debug("Begin evaluation")
-            val_loss, val_log_likehood, val_kl_loss, val_recons_loss = validation(val_loader, model, optimizer, epoch)
-            
+            val_loss, val_log_likehood, val_kl_loss, val_recons_loss = \
+                validation(val_loader, model)
+
             if verbose:
-                logger.info(f"Epoch: [{epoch+1}/{num_epochs}] - Train loss: {train_loss:.2f} - Val loss: {val_loss:.2f}")
-            
+                # logger.info(f"Epoch: [{epoch+1}/{num_epochs}] - Train loss: {train_loss:.2f} \
+                #         - Val loss: {val_loss:.2f}")
+                logger.info("Epoch: [%d/%d] - Train loss: %2f - Val loss: %2f",
+                            epoch+1, num_epochs, train_loss, val_loss)
+
             # Write in TensorBoard
             writer.add_scalar('train_loss', train_loss, epoch)
             writer.add_scalar('train_kl_loss', train_kl_loss, epoch)
             writer.add_scalar('train_recons_loss', train_recons_loss, epoch)
             writer.add_scalar('train_log_likelihood', train_log_likehood, epoch)
-            
+
             writer.add_scalar('val_loss', val_loss, epoch)
             writer.add_scalar('val_kl_loss', val_kl_loss, epoch)
             writer.add_scalar('val_recons_loss', val_recons_loss, epoch)
             writer.add_scalar('val_log_likehood', val_log_likehood, epoch)
-            
+
             # Check if the validation loss improve or not
             if val_loss < best_val_loss :
                 best_val_loss = val_loss
                 epoch_wo_improv = 0
-                best_val_epoch = epoch
                 best_params = model.state_dict()
             elif val_loss >= best_val_loss:
                 epoch_wo_improv += 1
-            
+
         else:
             # No improvement => early stopping is applied and best model is kept
             model.load_state_dict(best_params)
             break
-            
+
     return model
 
 
-def train(train_loader, model, optimizer, epoch, kullback_coef=0.28, reg_lambda=0.55):
+def train(train_loader, model, optimizer, kullback_coef=0.28):
     """The training step.
 
     Args:
@@ -266,22 +280,18 @@ def train(train_loader, model, optimizer, epoch, kullback_coef=0.28, reg_lambda=
                 The average loss on the epoch.
     """
     # Compute statistics
-    batch_time = AverageMeter()
     loss_meter = AverageMeter()
     kl_loss_meter = AverageMeter()
     recons_loss_meter = AverageMeter()
     log_likehood_meter = AverageMeter()
-    
-    #
-    end = time.time()
+
     model.train()
-    train_loss = []
     for ts_batch in train_loader:
         ts_batch = ts_batch.float().to(model.device)
         mu_x, sigma_x, log_px, kl_loss = model(ts_batch)
         recons_loss = model.reconstruct_loss(ts_batch, mu_x, sigma_x)
         loss = recons_loss + kullback_coef*kl_loss
-        
+
         mean_log_likehood = model.mean_log_likelihood(log_px)
         model.zero_grad()
         loss.backward()
@@ -297,8 +307,8 @@ def train(train_loader, model, optimizer, epoch, kullback_coef=0.28, reg_lambda=
     #train_loss_by_epoch.append(loss_meter.avg)
 
     return loss_meter.avg, log_likehood_meter.avg, kl_loss_meter.avg, recons_loss_meter.avg
-    
-def validation(val_loader, model, optimizer, epoch, kullback_coef=0.28):
+
+def validation(val_loader, model, kullback_coef=0.28):
     """The validation step.
 
     Args:
@@ -312,18 +322,17 @@ def validation(val_loader, model, optimizer, epoch, kullback_coef=0.28):
                 The average loss on the epoch.
     """
     # Compute statistics
-    batch_time = AverageMeter()
     loss_meter = AverageMeter()
     kl_loss_meter = AverageMeter()
     recons_loss_meter = AverageMeter()
     log_likehood_meter = AverageMeter()
-    
+
     model.eval()
     #val_loss = []
     with torch.no_grad():
         for ts_batch in val_loader:
             ts_batch = ts_batch.float().to(model.device)
-            
+
             mu_x, sigma_x, log_px, kl_loss = model(ts_batch)
             recons_loss = model.reconstruct_loss(ts_batch, mu_x, sigma_x)
             loss = recons_loss + kullback_coef*kl_loss
@@ -335,7 +344,7 @@ def validation(val_loader, model, optimizer, epoch, kullback_coef=0.28):
             log_likehood_meter.update(mean_log_likehood.item())
             loss_meter.update(loss.item())
             #train_loss.append(loss.item()*len(ts_batch))
-            
+
 
         return loss_meter.avg, log_likehood_meter.avg, kl_loss_meter.avg, recons_loss_meter.avg
 
@@ -355,8 +364,8 @@ def predict_test_scores(model, test_loader):
     for ts_batch in test_loader:
         ts_batch = ts_batch.float().to(model.device)
 
-        mu_x, sigma_x, log_px, kl_loss = model(ts_batch)
-        
+        _, _, log_px, _ = model(ts_batch)
+
         #recons_loss = model.reconstruct_loss(ts_batch, mu_x, sigma_x)
         #loss = recons_loss + kl_loss
         #print(log_px.shape)
@@ -364,7 +373,7 @@ def predict_test_scores(model, test_loader):
         #print(log_px.shape)
         mean_log_likehood = torch.mean(log_px, dim=1)
         reconstr_scores.append(mean_log_likehood.cpu().numpy())
-        
+
     reconstr_scores = np.concatenate(reconstr_scores)
     #outputs_array = np.concatenate(outputs_array)
     #print(reconstr_scores.shape)
