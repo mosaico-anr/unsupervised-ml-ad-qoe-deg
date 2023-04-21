@@ -27,6 +27,7 @@ The datasets used in this paper are from 03 Cloud Gaming platforms:
 Download and unzip the file in the data folder.
 
 ```bash
+mkdir data
 cd data/
 tar -xvf ANR-19-CE25-0012_std_gfn_xc_cg_webrtc_metrics.tar.xz .
 ```
