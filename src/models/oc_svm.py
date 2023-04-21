@@ -72,7 +72,7 @@ class OCSVM(Algorithm):
                             "gamma": gamma,
                             "coef0": coef0,
                             "tol": tol,
-                            "nu": nu_val,
+                            "nu_val": nu_val,
                             "shrinking": shrinking,
                             "cache_size": cache_size,
                             "verbose": verbose,

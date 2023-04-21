@@ -34,7 +34,7 @@ class USAD(Algorithm, PyTorchUtils):
             num_epochs (int, optional)              : The number max of epochs. 
                                                         Defaults to 10.
             batch_size (int, optional)              : The batch size. Defaults to 128.
-            lr (float, optional)                    : The optimizer learning rate. 
+            learning_rate (float, optional)         : The optimizer learning rate. 
                                                         Defaults to 1e-3.
             hidden_size (int, optional)             : The AE hidden size. 
                                                         Defaults to 5.

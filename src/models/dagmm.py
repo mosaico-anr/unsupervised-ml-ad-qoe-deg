@@ -87,7 +87,7 @@ class DAGMM(Algorithm, PyTorchUtils):
         self.init_params = {"name": name,
                             "num_epochs": num_epochs,
                             "batch_size": batch_size,
-                            "lr": learning_rate,
+                            "learning_rate": learning_rate,
                             "hidden_size": hidden_size,
                             "window_size": window_size,
                             "lambda_1": lambda_1,

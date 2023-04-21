@@ -19,16 +19,16 @@ The paper is under review at the Special Issue on Robust and Reliable Networks o
 ## Datasets
 
 The datasets used in this paper are from 03 Cloud Gaming platforms: 
-  - [Google Stadia](https://stadia.google.com/gg/)
+  - [Google Stadia](https://stadia.google.com/gg/) (shut down since January 2023)
   - [NVIDIA GeForceNow](https://www.nvidia.com/fr-fr/geforce-now/)
   - [Microsoft XCloud](https://www.xbox.com/fr-FR/cloud-gaming)
   
-  They can be download on [this link](https://cloud-gaming-traces.lhs.loria.fr/ANR-19-CE25-0012_stadia_cg_webrtc_metrics.tar.xz).  
+  They can be download on [this link](https://cloud-gaming-traces.lhs.loria.fr/ANR-19-CE25-0012_std_gfn_xc_cg_webrtc_metrics.7z).  
 Download and unzip the file in the data folder.
 
 ```bash
 cd data/
-tar -xvf ANR-19-CE25-0012_stadia_cg_webrtc_metrics.tar.xz .
+tar -xvf ANR-19-CE25-0012_std_gfn_xc_cg_webrtc_metrics.tar.xz .
 ```
 
 ## Dependencies

@@ -27,7 +27,7 @@ class AutoEncoder(Algorithm, PyTorchUtils):
     """AutoEncoder Algorithm.
     """
     def __init__(self, name: str='auto_encoder', num_epochs: int=100, batch_size: int=128,
-                lr: float=1e-3, hidden_size: int=5, window_size: int=10,
+                learning_rate: float=1e-3, hidden_size: int=5, window_size: int=10,
                 train_val_percentage: float=0.25, verbose=True, seed: int=None,
                 gpu: int=None, patience: int=20, save_dir='data', multi_outputs=True):
         """Auto-Encoder algorithm for anomaly detection.
@@ -38,7 +38,7 @@ class AutoEncoder(Algorithm, PyTorchUtils):
             num_epochs (int, optional)              : The number max of epochs. 
                                                         Defaults to 10.
             batch_size (int, optional)              : The batch size. Defaults to 128.
-            lr (float, optional)                    : The optimizer learning rate. 
+            learning_rate (float, optional)         : The optimizer learning rate. 
                                                         Defaults to 1e-3.
             hidden_size (int, optional)             : The AE hidden size. 
                                                         Defaults to 5.
@@ -62,7 +62,7 @@ class AutoEncoder(Algorithm, PyTorchUtils):
         self.num_epochs = num_epochs
         self.torch_save = True
         self.batch_size = batch_size
-        self.learning_rate = lr
+        self.learning_rate = learning_rate
         self.patience = patience
         self.hidden_size = hidden_size
         self.window_size = window_size
@@ -76,7 +76,7 @@ class AutoEncoder(Algorithm, PyTorchUtils):
         self.init_params = {"name": name,
                             "num_epochs": num_epochs,
                             "batch_size": batch_size,
-                            "lr": lr,
+                            "learning_rate": learning_rate,
                             "hidden_size": hidden_size,
                             "window_size": window_size,
                             "train_val_percentage": train_val_percentage,
