@@ -1,6 +1,8 @@
-# Which ML Model for Detecting QoE Degradation in Low-Latency Applications: Cloud-Gaming Case Study
+# ML Models for Detecting QoE Degradation in Low-Latency Applications: A Cloud-Gaming Case Study
 
-This repository contains the code of the different unsupervised machine learning algorithms implemented in the paper to detect anomalies in Cloud Gaming Sessions.
+This repository contains the code of the different unsupervised machine learning algorithms implemented in the paper to detect anomalies in Cloud Gaming Sessions. The paper was accepted at the Special Issue on Robust and Reliable Networks of the Future in [IEEE Transactions on Network and Service Management](https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=4275028).
+
+DOI: (to appear)
 
 The models implemented are :
 - [Isolation Forest](https://ieeexplore.ieee.org/document/4781136)
@@ -12,9 +14,6 @@ The models implemented are :
 - [DAGMM](https://openreview.net/forum?id=BJJLHbb0-)
 - [USAD](https://dl.acm.org/doi/pdf/10.1145/3394486.3403392)
 
-## Disclaimer
-
-The paper is under review at the Special Issue on Robust and Reliable Networks of the Future in IEEE Transactions on Network and Service Management. The repository is for reviewers only and will be publicly available upon paper acceptance.
 
 ## Datasets
 
